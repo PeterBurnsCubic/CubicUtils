@@ -13,7 +13,6 @@ function addSubdirectoryFromRepo() {
     git archive --remote=$repourl $head_ref:$subdir | tar -x --warning=no-timestamp
     popd
     git add $subdir
-    git commit -m "DUK-112 add $subdir"
 }
 
 # add a repo to the merge repo, moving code to its own subdirectory
@@ -33,15 +32,18 @@ function addRepo() {
     mkdir -p $subdir
     readarray -t <<<$(git ls-tree --name-only mergebranch)
     git mv "${MAPFILE[@]}" $subdir
-    git commit -m "DUK-112 Move contents to subdirectory $subdir"
+    git commit -m "DUK-112 Move contents to subdirectory $subdir"$'\n\n'"Signed-off-by: Steve Folly <Steve.Folly2@cubic.com>"
     # return to the merge repo
     popd
     popd
     # add the new repository as a remote and fetch all content
     git remote add $reponame /tmp/$reponame
     git fetch $reponame
+    # add content to the staging area
+    git archive --remote=/tmp/$reponame mergebranch | tar -x --warning=no-timestamp
+    git add $subdir
     # add branch to list
-    merge_branch_list+=("'$reponame/mergebranch'")
+    merge_branch_list+=("$reponame/mergebranch")
 }
 
 # clone the (empty) repo
@@ -49,10 +51,17 @@ git clone git@gitserver:gate/TfL_LCP3_EGate
 pushd TfL_LCP3_EGate
 
 # add third-party code (without history)
-mkdir -p libraries/third-party
-pushd libraries/third-party
+mkdir -p third-party
+pushd third-party
 addSubdirectoryFromRepo  ftp2/third-party  third-party_1.2.0.64  rapidjson
 addSubdirectoryFromRepo  ftp2/third-party  third-party_1.2.0.64  CURL
+popd
+
+# symlink to third-party directory (as created by gatepackage/scriptfiles/get_master.sh)
+mkdir -p libraries/third-party
+pushd libraries/third-party
+ln -s ../third-party
+git add third-party
 popd
 
 # add all the other shared/common repos
@@ -82,5 +91,9 @@ addRepo  Common/TimeLib                     Common_1.17.1.9      libraries
 addRepo  Common/Utilities                   Common_1.17.0.8      libraries
 addRepo  Utilities/ServiceDiscovery         Common_1.17.1.9      libraries
 
+# commit all the code
+git commit -m "DUK-112 Single repository for all LCP3 EGate code"$'\n\n'"Signed-off-by: Steve Folly <Steve.Folly2@cubic.com>"
+
 # merge
-git merge --allow-unrelated-histories "${merge_branch_list[@]}" -m "DUK-112 Merge shared and common repositories"
+git merge --allow-unrelated-histories "${merge_branch_list[@]}" --no-commit
+git commit -m "DUK-112 Merge history of all shared and common repositories"$'\n\n'"Signed-off-by: Steve Folly <Steve.Folly2@cubic.com>"
