@@ -5,7 +5,7 @@ import struct
 import xlrd
 
 def readPacket(fh):
-    src = str(fh.read(5))
+    src = fh.read(5).decode("ascii")
     ts = xlrd.xldate_as_datetime(struct.unpack('d', fh.read(8))[0], 0)
     len = int.from_bytes(fh.read(4), 'little')
     data = fh.read(len)
@@ -15,10 +15,13 @@ def interpretFile(fname):
     print(fname)
     print('---------------------')
     print('')
-    with open(fname, "rb") as fh:
-        while True:
-            (src, ts, data) = readPacket(fh)
-            print("{} {}: {}".format(src, ts, data.hex()))
+    try:
+        with open(fname, "rb") as fh:
+            while True:
+                (src, ts, data) = readPacket(fh)
+                print("{} {}: {}".format(src, ts, data.hex()))
+    except Exception:
+        pass
     print('')
 
 if len(sys.argv) < 2:
