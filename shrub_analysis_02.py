@@ -79,13 +79,13 @@ def reportACKStats(df, src, dst):
     print('Number of Retransmissions: {}/{} ({:.1f}%)'.format(nRetransmit, nUniqueMsg, (nRetransmit/nUniqueMsg)*100))
     print('Number of Spurious ACKs:   {}'.format(nSpuriousAcks))
 
-if len(sys.argv) < 2:
-    print('')
-    print('Usage: {} filestem [filestem...]'.format(sys.argv[0]))
-    print('where filestem is the start of a csv filename with _A and _B variants')
-    print('e.g. use filestem = "power_01" for power_01_A.csv and power_01_B.csv')
-    print('')
-    exit
-
-for fstem in sys.argv[1:]:
-    analyseFile(fstem)
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('')
+        print('Usage: {} filestem [filestem...]'.format(sys.argv[0]))
+        print('where filestem is the start of a csv filename with _A and _B variants')
+        print('e.g. use filestem = "power_01" for power_01_A.csv and power_01_B.csv')
+        print('')
+    else:
+        for fstem in sys.argv[1:]:
+            analyseFile(fstem)

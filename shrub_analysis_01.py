@@ -141,8 +141,9 @@ def reportStaticStatusQueries(df):
     print('Number of Static Status Queries = {} in {}s'.format(numQueries, endTime-startTime))
     print('')
 
-if len(sys.argv) < 2:
-    raise Exception('No files specified!')
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        raise Exception('No files specified!')
 
-for fname in sys.argv[1:]:
-    analyseFile(fname)
+    for fname in sys.argv[1:]:
+        analyseFile(fname)
