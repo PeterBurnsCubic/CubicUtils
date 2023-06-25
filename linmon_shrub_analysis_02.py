@@ -9,6 +9,13 @@ import shrub_analysis_02 as sa02
 csvA = "CSV_A.csv"
 csvB = "CSV_B.csv"
 
+def findFirstLinMonEntry(fh):
+    data = fh.read(100)
+    pos = data.find(b'COM')
+    if pos < 0:
+        raise Exception('Could not find COM in first 100 bytes')
+    fh.seek(pos)
+
 def readLinMonEntry(fh):
     src = fh.read(5).decode("ascii")
     ts = xlrd.xldate_as_datetime(struct.unpack('d', fh.read(8))[0], 0)
@@ -67,6 +74,7 @@ def parseShrubFromFile(fname, src):
     buff = bytearray()
     try:
         with open(fname, "rb") as fh:
+            findFirstLinMonEntry(fh)
             while True:
                 (psrc, ts, data) = readLinMonEntry(fh)
                 if psrc == src:
