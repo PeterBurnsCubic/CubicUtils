@@ -9,13 +9,6 @@ import shrub_analysis_02 as sa02
 csvA = "CSV_A.csv"
 csvB = "CSV_B.csv"
 
-def findFirstLinMonEntry(fh):
-    data = fh.read(100)
-    pos = data.find(b'COM')
-    if pos < 0:
-        raise Exception('Could not find COM in first 100 bytes')
-    fh.seek(pos)
-
 def readLinMonEntry(fh):
     src = fh.read(5).decode("ascii")
     ts = xlrd.xldate_as_datetime(struct.unpack('d', fh.read(8))[0], 0)
@@ -56,7 +49,6 @@ def interpretShrubPDU(pdu):
 
 def parseShrubFromBuffer(buff, shrub, ts):
     pdu = bytearray()
-    found = False
     for b in buff:
         if b == 1:
             if len(pdu) > 0:
@@ -65,27 +57,24 @@ def parseShrubFromBuffer(buff, shrub, ts):
         pdu.append(b)
         pdu_ = removeShrubTransparency(pdu)
         if isValidShrubPDU(pdu_):
-            found = True
             (typeseq, msg) = interpretShrubPDU(pdu_)
             shrub.append((ts, typeseq, msg))
             pdu = bytearray()
-    return (found, pdu, shrub)
+    return (pdu, shrub)
 
 def parseShrubFromFile(fname, src):
     shrub = []
     buff = bytearray()
     try:
         with open(fname, "rb") as fh:
-            findFirstLinMonEntry(fh)
             while True:
                 (psrc, ts, data) = readLinMonEntry(fh)
                 if psrc == src:
                     buff.extend(data)
-                    found = True
-                    while found:
-                        (found, buff, shrub) = parseShrubFromBuffer(buff, shrub, ts)
+                    (buff, shrub) = parseShrubFromBuffer(buff, shrub, ts)
                     
     except Exception as e:
+        print("Exception: {}".format(e))
         pass
     return shrub
 
@@ -104,10 +93,12 @@ def writeCSV(fname, data, tmin):
 def analyseFile(fname):
     adata = parseShrubFromFile(fname, 'COM2:') # Traffic from the BLU (Rx)
     bdata = parseShrubFromFile(fname, 'COM1:') # Traffic from the Gate (Tx)
+    print("len(adata)={} len(bdata)={}".format(len(adata), len(bdata)))
     tmin = min(adata[0][0], bdata[0][0])
     writeCSV(csvA, adata, tmin)
     writeCSV(csvB, bdata, tmin)
     sa02.analyseFile('CSV')
+    return
     os.remove(csvA)
     os.remove(csvB)
 
