@@ -54,7 +54,7 @@ def interpretShrubPDU(pdu):
         msgseq  = pdu[1] & 0x0F
         return ('{:02x}'.format(pdu[1]), 'Message Type {} Seq {}: {}'.format(msgtype, msgseq, pdu[2:-1]))
 
-def parseShrubFromBuffer(buff, shrub, ts):
+def parseShrubFromBuffer(buff, shrub, n, ts):
     pdu = bytearray()
     found = False
     for b in buff:
@@ -67,27 +67,39 @@ def parseShrubFromBuffer(buff, shrub, ts):
         if isValidShrubPDU(pdu_):
             found = True
             (typeseq, msg) = interpretShrubPDU(pdu_)
-            shrub.append((ts, typeseq, msg))
+            shrub.append((n, ts, typeseq, msg))
             pdu = bytearray()
     return (found, pdu, shrub)
 
-def parseShrubFromFile(fname, src):
-    shrub = []
-    buff = bytearray()
+def parseShrubFromFile(fname):
+    shrub1 = []
+    shrub2 = []
+    buff1 = bytearray()
+    buff2 = bytearray()
+    n = 1
     try:
         with open(fname, "rb") as fh:
             findFirstLinMonEntry(fh)
             while True:
                 (psrc, ts, data) = readLinMonEntry(fh)
-                if psrc == src:
-                    buff.extend(data)
+                if psrc == 'COM1:':
+                    buff1.extend(data)
                     found = True
                     while found:
-                        (found, buff, shrub) = parseShrubFromBuffer(buff, shrub, ts)
+                        (found, buff1, shrub1) = parseShrubFromBuffer(buff1, shrub1, n, ts)
+                        n += 1
+                elif psrc == 'COM2:':
+                    buff2.extend(data)
+                    found = True
+                    while found:
+                        (found, buff2, shrub2) = parseShrubFromBuffer(buff2, shrub2, n, ts)
+                        n += 1
+                else:
+                    print('Ignoring spurious data id "{}"'.format(psrc))    
                     
     except Exception as e:
         pass
-    return shrub
+    return (shrub1, shrub2)
 
 def timeDiffToSecs(tdiff):
     # N.B. assumes tdiff.days = 0
@@ -96,15 +108,12 @@ def timeDiffToSecs(tdiff):
 def writeCSV(fname, data, tmin):
     with open(fname, "w") as fh:
         fh.write('"Number","Time(s)","Type/SEQ","Type"\n')
-        n = 1
-        for (ts, typeseq, msg) in data:
+        for (n, ts, typeseq, msg) in data:
             fh.write('{},{},{},"{}"\n'.format(n, timeDiffToSecs(ts - tmin), typeseq, msg))
-            n += 1
 
 def analyseFile(fname):
-    adata = parseShrubFromFile(fname, 'COM2:') # Traffic from the BLU (Rx)
-    bdata = parseShrubFromFile(fname, 'COM1:') # Traffic from the Gate (Tx)
-    tmin = min(adata[0][0], bdata[0][0])
+    (bdata, adata) = parseShrubFromFile(fname) # 'COM1' is Tx (gate to BLU), which is 'B' traffic for our script
+    tmin = min(adata[0][1], bdata[0][1])
     writeCSV(csvA, adata, tmin)
     writeCSV(csvB, bdata, tmin)
     sa02.analyseFile('CSV')

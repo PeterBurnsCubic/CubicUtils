@@ -11,7 +11,7 @@ def analyseFile(fstem):
     # parse CSV files, combine and sort by ascending "Time(s)"
     dfA = parseCSVFile(fstem, 'A', 'BLU')   # 'A' traffic is from the BLU
     dfB = parseCSVFile(fstem, 'B', 'Gate')  # 'B' traffic is from the Gate
-    df = pandas.concat([dfA, dfB]).sort_values(by='Time(s)')
+    df = pandas.concat([dfA, dfB]).sort_values(by=['Time(s)', 'Number'])
 
     # reports
     reportACKStats(df, 'Gate', 'BLU')
