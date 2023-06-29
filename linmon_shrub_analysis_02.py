@@ -5,6 +5,7 @@ import os
 import struct
 import xlrd
 import shrub_analysis_02 as sa02
+import datetime
 
 csvA = "CSV_A.csv"
 csvB = "CSV_B.csv"
@@ -105,23 +106,30 @@ def timeDiffToSecs(tdiff):
     # N.B. assumes tdiff.days = 0
     return '{}.{:06d}'.format(tdiff.seconds, tdiff.microseconds)
 
-def writeCSV(fname, data, tmin):
+def writeCSV(fname, data, tmin, tstart, tend):
     with open(fname, "w") as fh:
         fh.write('"Number","Time(s)","Type/SEQ","Type"\n')
         for (n, ts, typeseq, msg) in data:
-            fh.write('{},{},{},"{}"\n'.format(n, timeDiffToSecs(ts - tmin), typeseq, msg))
+            if ts >= tstart and ts <= tend:
+                fh.write('{},{},{},"{}"\n'.format(n, timeDiffToSecs(ts - tmin), typeseq, msg))
 
-def analyseFile(fname):
+def analyseFile(fname, start_datetime, end_datetime):
     (bdata, adata) = parseShrubFromFile(fname) # 'COM1' is Tx (gate to BLU), which is 'B' traffic for our script
     tmin = min(adata[0][1], bdata[0][1])
-    writeCSV(csvA, adata, tmin)
-    writeCSV(csvB, bdata, tmin)
+    writeCSV(csvA, adata, tmin, start_datetime, end_datetime)
+    writeCSV(csvB, bdata, tmin, start_datetime, end_datetime)
     sa02.analyseFile('CSV')
     os.remove(csvA)
     os.remove(csvB)
 
-if len(sys.argv) < 2:
-    raise Exception('No files specified!')
-
-for fname in sys.argv[1:]:
-    analyseFile(fname)
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('')
+        print('Usage: {} linmon_binary_filename [start_datetime end_datetime]'.format(sys.argv[0]))
+        print('start and end datetimes are optional, else must be specified as "yyyy-mm-dd HH:MM:SS"')
+        print('')
+    else:
+        fname = sys.argv[1]
+        start_datetime = datetime.datetime.strptime(sys.argv[2] if len(sys.argv) > 2 else '1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+        end_datetime   = datetime.datetime.strptime(sys.argv[3] if len(sys.argv) > 3 else '2100-01-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+        analyseFile(fname, start_datetime, end_datetime)
