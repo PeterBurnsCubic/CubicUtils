@@ -1,0 +1,29 @@
+--[[
+Protocol   : UTT
+--]]
+
+function split( data, intval, alter, str )
+	if alter then return STARTED end
+	if data == 0x02 then return STARTED end  -- STX
+	if data == 0x06 then return STARTED end  -- ACK
+	if data == 0x15 then return STARTED end  -- NAK
+	return MODIFIED
+end
+
+function out()
+	-- the current telegram
+	local telegram = telegrams.this()
+
+	-- define red and blue color
+	local textcolors = { 0xFF0000, 0x0000FF }
+	local backcolors = { 0xFFEEDD, 0xDDEEFF }
+	local fg = textcolors[ telegram:dir() ]
+	local bg = backcolors[ telegram:dir() ]
+
+	-- set the foreground color of the timestamp depending on
+	-- the telegram source
+	box.text{ caption="Time", text=telegram:time(), fg=fg, bg=bg }
+
+	-- display all data simply as hex
+	box.text{ caption="Data", text=telegram:dump{}, fg=fg, bg=bg }
+end

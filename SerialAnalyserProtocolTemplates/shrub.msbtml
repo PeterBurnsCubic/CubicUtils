@@ -1,0 +1,259 @@
+--[[
+Protocol   	: SHrUB
+Template by	: IFTOOLS GmbH
+Version     : 001
+			: Initial version
+
+Brief:
+The start of a new telegram is specified by change of data direction
+and the telegrams are displayed simple hex data.
+--]]
+
+--[[
+Initiate all variables used by the settings dialog
+--]]
+-- always use the dot as decimal point (no other local settings!)
+os.setlocale("C")
+if not widgets.SHOW_TIME then
+	widgets.SHOW_TIME = "true"
+end
+if not widgets.SHOW_HEXDATA then
+	widgets.SHOW_HEXDATA = "false"
+end
+-- finally restore the last settings from the dialog
+widgets.LoadSettings()
+--[[
+You can add global presettings to the script.
+Here we use 2 lines for every telegram box (the default).
+We also add some background colours to the fields specified in the
+Lua table colours.
+--]]
+if box then
+	box.setup{
+		-- a transparency of 50%
+		-- alpha=50,
+		-- telegram fields with 2 lines (default)
+		lines=2,
+		-- global field colours, they will be overwritten by
+		-- individual colours in the box.text{...} functions
+		colours={
+			["STX"]=0x7FC0FF,
+			["ETX"] = 0xA8D4FF,
+			["PAD"] = 0xFF92FF,
+			["NL"] = 0xFFA4FF,
+			["Hexdata"] = 0xFFFFD0,
+			["Text"] = 0xFFEA88,
+			["Address"] = 0xE6E6FA
+		}
+	}
+end
+-- function split is called every time a data byte is received
+-- with the following parameters:
+-- data : the data value (9 bit) (unused)
+-- intval : the time distance to the former data (unused)
+-- alter : is true when the data source (direction) was changed 
+-- str : all received data bytes of the current telegram as a string (unused)
+-- returns the telegram state: UNCHANGED, STARTED, MODIFIED, COMPLETED
+function split( data, intval, alter, str )
+	if alter then return STARTED end
+    if data == 01 then return STARTED end
+    
+    
+	return MODIFIED
+end
+
+function out()
+	-- the current telegram
+	local tg = telegrams.this()
+
+	if widgets.SHOW_TIME == "true" then
+		box.text{ caption="Time", text=tg:time(), em=14, 
+				  bg=tg:dir()==1 and 0x00EEDD or 0x00AAFF }
+	end
+
+	if tg:data(1) == 0 then
+		response( tg:string() )
+	else
+		request( tg:string() )
+	end
+
+	if widgets.SHOW_HEXDATA == "true" then
+		box.text{ caption="Hexdata", text=tg:dump{width=2} }
+	end
+
+end
+
+function request( data )
+	-- check if there is enough data for processing
+    local tg = telegrams.this()
+
+    local tbl1 = {
+         [0] = "<= unknown",
+		[1] = "<= Static status reply",
+		[2] = "<= Event 1 Status reply",
+		[3] = "<= Event 2 Status reply",
+		[4] = "<= Event 3 Status reply",
+		[5] = "<= INVALID RESPONSE",
+		[6] = "<= EBLU Query Reply",
+		[7] = "<= INVALID RESPONSE",
+		[8] = "<= Breakthrough force reply",
+		[9] = "<= Diagnostic reply",
+		[10] = "<= INVALID RESPONSE",
+		[11] = "<= INVALID RESPONSE",
+		[12] = "<= INVALID RESPONSE",
+		[13] = "<= Initialise reply",
+		[14] = "<= Extension msg reply",
+		[15] = "<= Trace"
+    }
+
+    local tbl2 = {
+         [0] = "=> unknown",
+		[1] = "=> Static status query",
+		[2] = "=> Event 1 Status query",
+		[3] = "=> Event 2 Status query",
+		[4] = "=> Event 3 Status query",
+		[5] = "=> Set credit score maximum",
+		[6] = "=> Emergency Open mode",
+		[7] = "=> One shot release mode",
+		[8] = "=> Update credit store",
+		[9] = "=> Perform Diagnostic",
+		[10] = "=> change mode",
+		[11] = "=> EBLU Query",
+		[12] = "=> Update breakthrough force",
+		[13] = "=> Initialise",
+		[14] = "=> Extension msg",
+		[15] = "=> Trace"
+    }
+
+    if #data < 2 then return end
+
+    last = data:byte(2)
+    if last==06 then
+      box.text{ caption="Type", text=tg:dir()==1 and "ACK <=" or "ACK =>", em=12, bg=tg:dir()==1 and 0xFFEE00 or 0xFFEEDD   }
+      return 
+    elseif last==07 then
+      box.text{ caption="Type", text=tg:dir()==1 and "NAK <=" or "NAK =>", em=12, bg=tg:dir()==1 and 0xFFCC00 or 0xFFCCDD   }
+      return 
+    else
+  
+       if #data <5 then return end
+	   -- [STX][A1A2][TEXT][ETX][LRC]
+	   -- lrc includes A1A1 ... ETX (2,-2)
+       local type = (data:byte(2) & 0xF0)>>4
+
+       if tg:dir()==1 then
+	      box.text{ caption="Type", text=string.format("%s",tbl1[type]), em=24, bg=0xFFEE00 }
+       else
+          box.text{ caption="Type", text=string.format("%s",tbl2[type]), em=24, bg=0xFFEEDD }
+       end
+    
+       DataBlock={}
+       if tg:dir()==1 then
+          if type == 2 then
+             -- Event 1 Status Reply
+             local i=4
+
+             while i<=data:byte(3)+4 do
+                NewByte = data:byte(i)
+                if NewByte==0x08 then
+                   if data:byte(i+1)==0x31 then
+                      NewByte = 01
+                   end 
+                   if data:byte(i+1)==0x32 then
+                      NewByte = 08
+                   end 
+                   i=i+1
+                end
+                table.insert(DataBlock,NewByte)
+                i=i+1
+             end
+
+             local firstByte = DataBlock[1]
+             local secondByte = DataBlock[2]
+             if (firstByte ~= nil) and (secondByte ~= nil) then
+                box.text{caption="Data Block", text =string.format("%02X %02X",firstByte, secondByte)}
+                local eventList = {}
+                if (firstByte & 1)==1 then
+                   table.insert(eventList, "Emergency Open")
+                end
+                if ((secondByte & 0x3F) ~= 0) then
+                   table.insert(eventList, "Paddles Forced")
+                end
+                if #eventList > 0 then
+                   box.text{ caption = "Event", text=table.concat(eventList, ", "), bg=0xEE5555 }
+                end
+             end
+             
+             
+             
+          end
+       end
+	   -- STX
+	   --box.text{ caption="SOM", text=string.format("%02X",data:byte(1) ) }
+	   -- A1A2
+	   box.text{ caption="Type/SEQ", text=string.format("%02X",data:byte(2))}
+	   -- TEXT
+	   --box.text{ caption="length", text=string.format("%02X",data:byte(3))}
+
+       length = data:byte(3)
+	   -- ETX
+	   --box.text{ caption="data", text=data:sub(4,3+length):dump()}
+	   -- LRC
+	   local cks_must = lrc( data:sub(2,-2 ) )
+	   local cks_is = data:byte(-1)
+	   local bg = cks_must == cks_is and 0x80FF80 or 0xFFA0A0
+	   --box.text{ caption="LRC", text=string.format("%02X",cks_is ), bg=bg }
+    end
+end
+
+function response( data )
+	-- check if there is enough data for processing
+	if #data < 7 then return end
+	-- [NL][STX][A1A2][TEXT][EXT][LRC][PAD]
+	box.text{ caption="Type", text="<= RESPONSE", em=12, bg=0xDDEEFF }
+	-- Null character, only starting responses
+	box.text{ caption="NL", text=string.format("%02X",data:byte(1) ) }
+	-- STX
+	box.text{ caption="STX", text=string.format("%02X",data:byte(2) ) }
+	-- A1A2
+	box.text{ caption="Address", text=data:sub(3,4) }
+	-- TEXT
+	box.text{ caption="data", text=data:sub(5,-4) }
+	-- ETX
+	box.text{ caption="ETX", text=string.format("%02X",data:byte(-3) ) }
+	-- LRC
+	local cks_must = lrc( data:sub(3,-3 ) )
+	local cks_is = data:byte(-2)
+	local bg = cks_must == cks_is and 0x80FF80 or 0xFF8080
+	box.text{ caption="LRC", text=string.format("%02X",cks_is ), bg=bg }
+	-- PAD field is only added to a response
+	box.text{ caption="PAD", text=string.format("%02X",data:byte(-1) ) }
+end
+
+function lrc( data )
+	local c = 0
+	for i=1,#data do
+		c = bit32.bxor(c,data:byte(i))
+	end
+	return c
+end
+
+function dialog()
+	local row = 1
+	widgets.SetTitle("SHrUBSetup Dialog")
+	widgets.CheckBox{ name="wxSHOW_TIME", label="Show time",
+					  row=row, col=1, value=widgets.SHOW_TIME=="true" }
+	row = row + 1
+	widgets.CheckBox{ name="wxSHOW_HEXDATA", label="Show hex data",
+					  row=row, col=1, value=widgets.SHOW_HEXDATA=="true" }
+end
+
+function callback_wxSHOW_TIME( value )
+	widgets.SHOW_TIME = value
+	widgets.SaveSettings()
+end
+
+function callback_wxSHOW_HEXDATA( value )
+	widgets.SHOW_HEXDATA = value
+	widgets.SaveSettings()
+end
