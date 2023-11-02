@@ -2,11 +2,42 @@
 Protocol   : UTT
 --]]
 
+-- state
+waitForNext = 0
+waitForETX  = 1
+waitForCRC1 = 2
+waitForCRC2 = 3
+state       = waitForNext
+
 function split( data, intval, alter, str )
-	if alter then return STARTED end
-	if data == 0x02 then return STARTED end  -- STX
-	if data == 0x06 then return STARTED end  -- ACK
-	if data == 0x15 then return STARTED end  -- NAK
+	if data == 0x02 then
+		state = waitForETX
+		return STARTED
+	end
+	if alter then
+		state = waitForNext
+		return STARTED
+	end
+	if state == waitForETX then
+		if data == 0x03 then state = waitForCRC1 end
+		return MODIFIED
+	end
+	if state == waitForCRC1 and data ~= 0x08 then
+		state = waitForCRC2
+		return MODIFIED
+	end
+	if state == waitForCRC2 and data ~= 0x08 then
+		state = waitForNext
+		return COMPLETED
+	end
+	if data == 0x06 or data == 0x15 then
+		if #str == 2 and str:byte(1) == 0x01 then
+			return COMPLETED               -- SHrUB ACK/NAK
+		else
+			return STARTED + COMPLETED     -- UTT ACK/NAK
+		end
+	end
+	if #str == 1 then return STARTED end           -- start of junk (or SHrUB ACK/NAK)
 	return MODIFIED
 end
 
