@@ -8,7 +8,7 @@ Initiate all variables used by the settings dialog
 -- always use the dot as decimal point (no other local settings!)
 os.setlocale("C")
 if not widgets.SHOW_HEXDATA then
-	widgets.SHOW_HEXDATA = false
+	widgets.SHOW_HEXDATA = "false"
 end
 -- finally restore the last settings from the dialog
 widgets.LoadSettings()
@@ -57,41 +57,49 @@ end
 function out()
 	-- the current telegram
 	local tg = telegrams.this()
+	local data = tg:string()
 
-	-- define red and blue color
-	local textcolors = { 0xFF0000, 0x0000FF }
-	local backcolors = { 0xFFEEDD, 0xDDEEFF }
-	local fg = textcolors[ tg:dir() ]
-	local bg = backcolors[ tg:dir() ]
-
-	-- relative time
-	box.text{ caption="Time", text=tg:time(), fg=fg, bg=bg }
-
-	-- description
+	-- interpret, set colours
+	addr, mid = messageAddrAndMID(data)
 	if tg:dir() == 1 then
-		name, details = uttMessage(tg)
+		name, details = uttMessage(data)
+		fg = 0xFF0000
+		bg = 0xFFEEDD
 	else
-		name, details = gateMessage(tg)
+		name, details = gateMessage(data)
+		fg = 0x0000FF
+		bg = 0xDDEEFF
 	end
-	box.text{ caption="Name",    text=name,    fg=fg, bg=bg }
-	box.text{ caption="Details", text=details, fg=fg, bg=bg }
 
-	-- data as hex
-	if widgets.SHOW_HEXDATA then
+	-- display
+	box.text{ caption="Addr",	text=addr,	fg=fg, bg=bg }
+	box.text{ caption="MID",	text=mid,	fg=fg, bg=bg }
+	box.text{ caption="Name",	text=name,	fg=fg, bg=bg }
+	box.text{ caption="Details",	text=details,	fg=fg, bg=bg }
+	if widgets.SHOW_HEXDATA == "true" then
 		box.text{ caption="Hexdata", text=tg:dump{width=2}, fg=fg, bg=bg }
 	end
 end
 
-function gateMessage(tg)
-	data = tg:string()
-	defaultDetails = tg:dump{width=2}
+function messageAddrAndMID(data)
+	addr, mid, body, crc = parseMessage(data)
+	if mid then
+		return string.format('%02X', addr), string.format('%02X', mid)
+	else
+		return '', ''
+	end
+end
+
+function gateMessage(data)
+	defaultDetails = hexencode(data)
 	if data == '\x01\x06'		then return "ACK",		defaultDetails			end
 	if data == '\x01\x15'		then return "NAK",		defaultDetails			end
-	if not isValidMessage(data)	then return "Junk", 		defaultDetails			end
-	mid = data:byte(3)
+	addr, mid, body, crc = parseMessage(data)
+	if not body			then return "Junk", 		defaultDetails			end
+	defaultDetails = hexencode(body)
 	if mid == 0x20 then return "Communications Configuration",	defaultDetails			end
-	if mid == 0x21 then return "Execute Script",			executeScriptDetails(data)	end
-	if mid == 0x23 then return "Encode Data",			encodeDataDetails(data)		end
+	if mid == 0x21 then return "Execute Script",			executeScriptDetails(body)	end
+	if mid == 0x23 then return "Encode Data",			encodeDataDetails(body)		end
 	if mid == 0x24 then return "Read Photosensors",			defaultDetails			end
 	if mid == 0x25 then return "Read Temperature Sensor",		defaultDetails			end
 	if mid == 0x26 then return "Request Status",			defaultDetails			end
@@ -100,20 +108,20 @@ function gateMessage(tg)
 	if mid == 0x29 then return "Read Spare I/O Bits",		defaultDetails			end
 	if mid == 0x30 then return "Ping Response",			defaultDetails			end
 	if mid == 0x31 then return "Request Last Script Result",	defaultDetails			end
-	return "Unrecognised Gate Message (MID=" .. string.format('0x%x', mid) .. ")", defaultDetails
+	return "Unrecognised Gate Message (MID=" .. string.format('%02X', mid) .. ")", defaultDetails
 end
 
-function uttMessage(tg)
-	data = tg:string()
-	defaultDetails = tg:dump{width=2}
+function uttMessage(data)
+	defaultDetails = hexencode(data)
 	if data == '\x06'		then return "ACK",		defaultDetails			end
 	if data == '\x15'		then return "NAK",		defaultDetails			end
-	if not isValidMessage(data)	then return "Junk", 		defaultDetails			end
-	mid = data:byte(3)
+	addr, mid, body, crc = parseMessage(data)
+	if not body			then return "Junk", 		defaultDetails			end
+	defaultDetails = hexencode(body)
 	if mid == 0x20 then return "Unknown Message",			defaultDetails			end
-	if mid == 0x21 then return "Script Complete",			defaultDetails			end
-	if mid == 0x22 then return "Read Data",				defaultDetails			end
-	if mid == 0x24 then return "PhotosensorStatus",			photosensorStatusDetails(data)	end
+	if mid == 0x21 then return "Script Complete",			scriptCompleteDetails(body)	end
+	if mid == 0x22 then return "Read Data",				readDataDetails(body)		end
+	if mid == 0x24 then return "PhotosensorStatus",			photosensorStatusDetails(body)	end
 	if mid == 0x25 then return "Temperature Sensor Status",		defaultDetails			end
 	if mid == 0x27 then return "Count Pulses Result",		defaultDetails			end
 	if mid == 0x28 then return "Software Version Result",		defaultDetails			end
@@ -124,29 +132,84 @@ function uttMessage(tg)
 	if mid == 0x31 then return "UTT_MSG_DATA_READ_TRK1",		defaultDetails			end
 	if mid == 0x32 then return "UTT_MSG_DATA_READ_TRK2",		defaultDetails			end
 	if mid == 0x33 then return "UTT_MSG_DATA_READ_TRK3",		defaultDetails			end
-	return "Unrecognised UTT Message (MID=" .. string.format('0x%x', mid) .. ")", defaultDetails
+	return "Unrecognised UTT Message (MID=" .. string.format('%02X', mid) .. ")", defaultDetails
 end
 
-function isValidMessage(data)
-	return data:match('^\x02.+\x03..?.?$')  -- STX msg ETX CRC
+function parseMessage(data)
+	-- remove SUB sequences
+	data = data:gsub('\x08\x82', '\x02')
+	data = data:gsub('\x08\x83', '\x03')
+	data = data:gsub('\x08\x86', '\x06')
+	data = data:gsub('\x08\x95', '\x15')
+	data = data:gsub('\x08\x88', '\x08')
+
+	-- parse
+	addr, mid, body, crc = data:match('^\x02(.)(.)(.*)\x03(..)$')  -- STX addr mid body ETX crc
+	if addr then
+		return addr:byte(1), mid:byte(1), body, (0x100 * crc:byte(1)) + crc:byte(2)
+	else
+		return nil, nil, nil, nil
+	end
 end
 
-function executeScriptDetails(data)
-	return "Execute Script Details"
+function executeScriptDetails(body)
+	return scriptName(body:byte(4)) .. string.format(' (Length %d bytes)', body:byte(5))
 end
 
-function encodeDataDetails(data)
-	return "Encode Data Details"
+function encodeDataDetails(body)
+	numbits = (0x100 * body:byte(16)) + body:byte(17)
+	return string.format('Data: %d bits (%d bytes)', numbits, numbits/8)
 end
 
-function photosensorStatusDetails(data)
-	return "Photosensor Status"
+function scriptCompleteDetails(body)
+	return scriptName(body:byte(1)) .. string.format(' Result 0x%02X', body:byte(2))
+end
+
+function readDataDetails(body)
+	return string.format('Length = %d bytes', #body)
+end
+
+function photosensorStatusDetails(body)
+	return string.format('%02X %02X', body:byte(2), body:byte(3))
+end
+
+function scriptName(id)
+	-- names from SCRIPT_IDENT_e in uth000.h
+	if id == 1  then return 'Reset'			end
+	if id == 2  then return 'ReadSensors'		end
+	if id == 3  then return 'ReadTemperature'	end
+	if id == 4  then return 'ReadStatus'		end
+	if id == 5  then return 'ReadSoftwareVersion'	end
+	if id == 6  then return 'EncodeData'		end
+	if id == 7  then return 'ReadTkt'		end
+	if id == 8  then return 'TktEntryToExit'	end
+	if id == 9  then return 'VerifyTkt'		end
+	if id == 10 then return 'EncodeTkt'		end
+	if id == 11 then return 'CaptureTkt'		end
+	if id == 12 then return 'EjectTkt'		end
+	if id == 13 then return 'EjectTktWithSpeedChk'	end
+	if id == 14 then return 'SetDAC'		end
+	if id == 15 then return 'SetMultiplier'		end
+	if id == 16 then return 'Stop'			end
+	if id == 17 then return 'SetMotorSpeed'		end
+	if id == 18 then return 'SpeedCheck'		end
+	if id == 19 then return 'CalPhotoSensor'	end
+	if id == 20 then return 'RunFwd2Sec'		end
+	if id == 21 then return 'FlushTkts'		end
+	if id == 22 then return 'ClearHead'		end
+	if id == 23 then return 'StartBeltClean'	end
+	if id == 24 then return 'StopBeltClean'		end
+	return string.format('Unknown script id %d', id)
+end
+
+function hexencode(str)
+      return (str:gsub(".", function(char) return string.format("%02X ", char:byte()) end))
 end
 
 function dialog()
 	widgets.SetTitle("UTT Protocol Config")
 	widgets.CheckBox{ name="wxSHOW_HEXDATA", label="Show hex data",
-			  row=1, col=1, value=widgets.SHOW_HEXDATA }
+			  row=1, col=1, value=(widgets.SHOW_HEXDATA == "true")}
 end
 
 function callback_wxSHOW_HEXDATA( value )
