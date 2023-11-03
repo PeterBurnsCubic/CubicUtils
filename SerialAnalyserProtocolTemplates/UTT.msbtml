@@ -2,7 +2,20 @@
 Protocol   : UTT
 --]]
 
--- state
+--[[
+Initiate all variables used by the settings dialog
+--]]
+-- always use the dot as decimal point (no other local settings!)
+os.setlocale("C")
+if not widgets.SHOW_HEXDATA then
+	widgets.SHOW_HEXDATA = false
+end
+-- finally restore the last settings from the dialog
+widgets.LoadSettings()
+
+--[[
+state
+--]]
 waitForNext = 0
 waitForETX  = 1
 waitForCRC1 = 2
@@ -43,18 +56,100 @@ end
 
 function out()
 	-- the current telegram
-	local telegram = telegrams.this()
+	local tg = telegrams.this()
 
 	-- define red and blue color
 	local textcolors = { 0xFF0000, 0x0000FF }
 	local backcolors = { 0xFFEEDD, 0xDDEEFF }
-	local fg = textcolors[ telegram:dir() ]
-	local bg = backcolors[ telegram:dir() ]
+	local fg = textcolors[ tg:dir() ]
+	local bg = backcolors[ tg:dir() ]
 
-	-- set the foreground color of the timestamp depending on
-	-- the telegram source
-	box.text{ caption="Time", text=telegram:time(), fg=fg, bg=bg }
+	-- relative time
+	box.text{ caption="Time", text=tg:time(), fg=fg, bg=bg }
 
-	-- display all data simply as hex
-	box.text{ caption="Data", text=telegram:dump{}, fg=fg, bg=bg }
+	-- description
+	if tg:dir() == 1 then
+		name, details = uttMessage(tg)
+	else
+		name, details = gateMessage(tg)
+	end
+	box.text{ caption="Name",    text=name,    fg=fg, bg=bg }
+	box.text{ caption="Details", text=details, fg=fg, bg=bg }
+
+	-- data as hex
+	if widgets.SHOW_HEXDATA then
+		box.text{ caption="Hexdata", text=tg:dump{width=2}, fg=fg, bg=bg }
+	end
+end
+
+function gateMessage(tg)
+	data = tg:string()
+	defaultDetails = tg:dump{width=2}
+	if data == '\x01\x06'		then return "ACK",		defaultDetails			end
+	if data == '\x01\x15'		then return "NAK",		defaultDetails			end
+	if not isValidMessage(data)	then return "Junk", 		defaultDetails			end
+	mid = data:byte(3)
+	if mid == 0x20 then return "Communications Configuration",	defaultDetails			end
+	if mid == 0x21 then return "Execute Script",			executeScriptDetails(data)	end
+	if mid == 0x23 then return "Encode Data",			encodeDataDetails(data)		end
+	if mid == 0x24 then return "Read Photosensors",			defaultDetails			end
+	if mid == 0x25 then return "Read Temperature Sensor",		defaultDetails			end
+	if mid == 0x26 then return "Request Status",			defaultDetails			end
+	if mid == 0x27 then return "Request Software Version",		defaultDetails			end
+	if mid == 0x28 then return "Configure Spare I/O Bits",		defaultDetails			end
+	if mid == 0x29 then return "Read Spare I/O Bits",		defaultDetails			end
+	if mid == 0x30 then return "Ping Response",			defaultDetails			end
+	if mid == 0x31 then return "Request Last Script Result",	defaultDetails			end
+	return "Unrecognised Gate Message (MID=" .. string.format('0x%x', mid) .. ")", defaultDetails
+end
+
+function uttMessage(tg)
+	data = tg:string()
+	defaultDetails = tg:dump{width=2}
+	if data == '\x06'		then return "ACK",		defaultDetails			end
+	if data == '\x15'		then return "NAK",		defaultDetails			end
+	if not isValidMessage(data)	then return "Junk", 		defaultDetails			end
+	mid = data:byte(3)
+	if mid == 0x20 then return "Unknown Message",			defaultDetails			end
+	if mid == 0x21 then return "Script Complete",			defaultDetails			end
+	if mid == 0x22 then return "Read Data",				defaultDetails			end
+	if mid == 0x24 then return "PhotosensorStatus",			photosensorStatusDetails(data)	end
+	if mid == 0x25 then return "Temperature Sensor Status",		defaultDetails			end
+	if mid == 0x27 then return "Count Pulses Result",		defaultDetails			end
+	if mid == 0x28 then return "Software Version Result",		defaultDetails			end
+	if mid == 0x29 then return "Sensor Calibration Result",		defaultDetails			end
+	if mid == 0x2A then return "Status Response",			defaultDetails			end
+	if mid == 0x2B then return "I/O Bit Read Response",		defaultDetails			end
+	if mid == 0x30 then return "Ping",				defaultDetails			end
+	if mid == 0x31 then return "UTT_MSG_DATA_READ_TRK1",		defaultDetails			end
+	if mid == 0x32 then return "UTT_MSG_DATA_READ_TRK2",		defaultDetails			end
+	if mid == 0x33 then return "UTT_MSG_DATA_READ_TRK3",		defaultDetails			end
+	return "Unrecognised UTT Message (MID=" .. string.format('0x%x', mid) .. ")", defaultDetails
+end
+
+function isValidMessage(data)
+	return data:match('^\x02.+\x03..?.?$')  -- STX msg ETX CRC
+end
+
+function executeScriptDetails(data)
+	return "Execute Script Details"
+end
+
+function encodeDataDetails(data)
+	return "Encode Data Details"
+end
+
+function photosensorStatusDetails(data)
+	return "Photosensor Status"
+end
+
+function dialog()
+	widgets.SetTitle("UTT Protocol Config")
+	widgets.CheckBox{ name="wxSHOW_HEXDATA", label="Show hex data",
+			  row=1, col=1, value=widgets.SHOW_HEXDATA }
+end
+
+function callback_wxSHOW_HEXDATA( value )
+	widgets.SHOW_HEXDATA = value
+	widgets.SaveSettings()
 end
