@@ -153,7 +153,7 @@ function parseMessage(data)
 end
 
 function executeScriptDetails(body)
-	return scriptName(body:byte(4)) .. string.format(' (Length %d bytes)', body:byte(5))
+	return scriptName(body:byte(1)) .. string.format(' (Length %d bytes)', body:byte(2))
 end
 
 function encodeDataDetails(body)
