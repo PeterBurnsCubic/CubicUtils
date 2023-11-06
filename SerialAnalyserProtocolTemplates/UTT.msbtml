@@ -175,30 +175,30 @@ end
 
 function scriptName(id)
 	-- names from SCRIPT_IDENT_e in uth000.h
-	if id == 1  then return 'Reset'			end
-	if id == 2  then return 'ReadSensors'		end
-	if id == 3  then return 'ReadTemperature'	end
-	if id == 4  then return 'ReadStatus'		end
-	if id == 5  then return 'ReadSoftwareVersion'	end
-	if id == 6  then return 'EncodeData'		end
-	if id == 7  then return 'ReadTkt'		end
-	if id == 8  then return 'TktEntryToExit'	end
-	if id == 9  then return 'VerifyTkt'		end
-	if id == 10 then return 'EncodeTkt'		end
-	if id == 11 then return 'CaptureTkt'		end
-	if id == 12 then return 'EjectTkt'		end
-	if id == 13 then return 'EjectTktWithSpeedChk'	end
-	if id == 14 then return 'SetDAC'		end
-	if id == 15 then return 'SetMultiplier'		end
-	if id == 16 then return 'Stop'			end
-	if id == 17 then return 'SetMotorSpeed'		end
-	if id == 18 then return 'SpeedCheck'		end
-	if id == 19 then return 'CalPhotoSensor'	end
-	if id == 20 then return 'RunFwd2Sec'		end
-	if id == 21 then return 'FlushTkts'		end
-	if id == 22 then return 'ClearHead'		end
-	if id == 23 then return 'StartBeltClean'	end
-	if id == 24 then return 'StopBeltClean'		end
+	if id == 0  then return 'Reset'			end
+	if id == 1  then return 'ReadSensors'		end
+	if id == 2  then return 'ReadTemperature'	end
+	if id == 3  then return 'ReadStatus'		end
+	if id == 4  then return 'ReadSoftwareVersion'	end
+	if id == 5  then return 'EncodeData'		end
+	if id == 6  then return 'ReadTkt'		end
+	if id == 7  then return 'TktEntryToExit'	end
+	if id == 8  then return 'VerifyTkt'		end
+	if id == 9  then return 'EncodeTkt'		end
+	if id == 10 then return 'CaptureTkt'		end
+	if id == 11 then return 'EjectTkt'		end
+	if id == 12 then return 'EjectTktWithSpeedChk'	end
+	if id == 13 then return 'SetDAC'		end
+	if id == 14 then return 'SetMultiplier'		end
+	if id == 15 then return 'Stop'			end
+	if id == 16 then return 'SetMotorSpeed'		end
+	if id == 17 then return 'SpeedCheck'		end
+	if id == 18 then return 'CalPhotoSensor'	end
+	if id == 19 then return 'RunFwd2Sec'		end
+	if id == 20 then return 'FlushTkts'		end
+	if id == 21 then return 'ClearHead'		end
+	if id == 22 then return 'StartBeltClean'	end
+	if id == 23 then return 'StopBeltClean'		end
 	return string.format('Unknown script id %d', id)
 end
 
