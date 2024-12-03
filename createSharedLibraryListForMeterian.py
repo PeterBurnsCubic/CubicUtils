@@ -1,22 +1,24 @@
 #!/bin/python3
 
+import sys
 import os
 import subprocess
 import re
 
-srcdir   = "/usr/local/src/gitserver/TfL_LCP3_Gate/"
-builddir = "Gate_Common/lcp3_e2gate/build/i386-linux-gnu/lcp3_e2gate_release_i386-linux-gnu/"
-exec     = srcdir + builddir + "e2gate"
+if len(sys.argv) < 2:
+    print('Usage: {} execname'.format(sys.argv[0]))
+    sys.exit()
+execname = sys.argv[1]
 rxsoname = re.compile("[^\s/]+\.so[^\s/]*")  # regex for shared library names (anywhere in the string)
 rxpkname = re.compile("^[^\s/]+:i386")       # regex for i386 package names (at the start of the string)
 
-if not os.path.isfile(exec):
-    raise Exception("{} not found".format(exec))
-print("Creating shared library version list for {}".format(exec))
+if not os.path.isfile(execname):
+    raise Exception("{} not found".format(execname))
+print("Creating shared library version list for {}".format(execname))
 
 # find shared libs by running ldd
 pkgset = set()
-ldd_lines = subprocess.check_output(["ldd", exec], text=True).splitlines()
+ldd_lines = subprocess.check_output(["ldd", execname], text=True).splitlines()
 for ldd_line in ldd_lines:
     sonames = rxsoname.findall(ldd_line)
     if len(sonames) < 1:
